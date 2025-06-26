@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 __version__ = "0.1.0"
 
 # %% Imports
@@ -8,7 +8,6 @@ import os
 import shutil
 import subprocess
 import sys
-import weakref
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -127,7 +126,7 @@ class CmdRunner:
 
 
 # %% Core classes
-@dataclass(repr=False)
+@dataclass(repr=False, frozen=True)
 class PackageManager:
     name: str
     dependency_file: Path
@@ -138,11 +137,6 @@ class PackageManager:
     update_cmd: Optional[Command] = None
     cleanup_cmd: Optional[Command] = None
     uninstall_cmd: Optional[Command] = None
-
-    _registry: ClassVar[weakref.WeakSet] = weakref.WeakSet()
-
-    def __post_init__(self) -> None:
-        type(self)._registry.add(self)
 
     @classmethod
     def instances(cls) -> list["PackageManager"]:
@@ -326,7 +320,7 @@ def make_managers(runner: CmdRunner) -> list[PackageManager]:
     managers.append(  # Homebrew
         PackageManager(
             name="brew",
-            dependency_file=Path.home() / "Brewfile",
+            dependency_file=Path.home() / "dotfiles" / "package-list" / "Brewfile",
             exit_codes=ExitCodeMap(
                 bootstrap_failure=ExitCode.BREW_BOOTSTRAP_FAILED,
                 update_failure=ExitCode.BREW_UPDATE_FAILED,
@@ -344,7 +338,7 @@ def make_managers(runner: CmdRunner) -> list[PackageManager]:
     managers.append(  # apt - Builtin
         PackageManager(
             name="apt",
-            dependency_file=Path.home() / "apt-packages.txt",
+            dependency_file=Path.home() / "dotfiles" / "package-list" / "aptfile",
             exit_codes=ExitCodeMap(
                 bootstrap_failure=ExitCode.APT_BOOTSTRAP_FAILED,
                 update_failure=ExitCode.APT_UPDATE_FAILED,
@@ -359,40 +353,40 @@ def make_managers(runner: CmdRunner) -> list[PackageManager]:
             cleanup_cmd=["sudo", "apt", "autoremove", "-y"],
         )
     )
-    managers.append(  # cargo - rust
-        PackageManager(
-            name="cargo",
-            dependency_file=Path.home() / "cargo-tools.txt",
-            exit_codes=ExitCodeMap(
-                bootstrap_failure=ExitCode.CARGO_BOOTSTRAP_FAILED,
-                update_failure=ExitCode.CARGO_UPDATE_FAILED,
-                install_failure=ExitCode.CARGO_INSTALL_FAILED,
-                uninstall_failure=ExitCode.MANAGER_EXEC_FAILED,
-                cleanup_failure=ExitCode.CARGO_CLEANUP_FAILED,
-            ),
-            install_func=_cargo_install,
-            runner=runner,
-            bootstrap_cmd="sh -c 'curl --proto \"=https\" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'",
-            update_cmd=["cargo", "install-update", "-a"],
-        )
-    )
-    managers.append(  # uv - python
-        PackageManager(
-            name="uv",
-            dependency_file=Path.home() / "pyproject.toml",
-            exit_codes=ExitCodeMap(
-                bootstrap_failure=ExitCode.UV_BOOTSTRAP_FAILED,
-                update_failure=ExitCode.UV_UPDATE_FAILED,
-                install_failure=ExitCode.UV_INSTALL_FAILED,
-                uninstall_failure=ExitCode.MANAGER_EXEC_FAILED,
-                cleanup_failure=ExitCode.UV_CLEANUP_FAILED,
-            ),
-            install_func=_uv_install,
-            runner=runner,
-            bootstrap_cmd=["cargo", "install", "uv"],
-            update_cmd=["uv", "pip", "install", "--system", "--upgrade"],
-        )
-    )
+    # managers.append(  # cargo - rust
+    #     PackageManager(
+    #         name="cargo",
+    #         dependency_file=Path.home() / "cargo-tools.txt",
+    #         exit_codes=ExitCodeMap(
+    #             bootstrap_failure=ExitCode.CARGO_BOOTSTRAP_FAILED,
+    #             update_failure=ExitCode.CARGO_UPDATE_FAILED,
+    #             install_failure=ExitCode.CARGO_INSTALL_FAILED,
+    #             uninstall_failure=ExitCode.MANAGER_EXEC_FAILED,
+    #             cleanup_failure=ExitCode.CARGO_CLEANUP_FAILED,
+    #         ),
+    #         install_func=_cargo_install,
+    #         runner=runner,
+    #         bootstrap_cmd="sh -c 'curl --proto \"=https\" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'",
+    #         update_cmd=["cargo", "install-update", "-a"],
+    #     )
+    # )
+    # managers.append(  # uv - python
+    #     PackageManager(
+    #         name="uv",
+    #         dependency_file=Path.home() / "pyproject.toml",
+    #         exit_codes=ExitCodeMap(
+    #             bootstrap_failure=ExitCode.UV_BOOTSTRAP_FAILED,
+    #             update_failure=ExitCode.UV_UPDATE_FAILED,
+    #             install_failure=ExitCode.UV_INSTALL_FAILED,
+    #             uninstall_failure=ExitCode.MANAGER_EXEC_FAILED,
+    #             cleanup_failure=ExitCode.UV_CLEANUP_FAILED,
+    #         ),
+    #         install_func=_uv_install,
+    #         runner=runner,
+    #         bootstrap_cmd=["cargo", "install", "uv"],
+    #         update_cmd=["uv", "pip", "install", "--system", "--upgrade"],
+    #     )
+    # )
     return managers
 
 
@@ -424,21 +418,20 @@ if __name__ == "__main__":
 
     # Create runner
     runner = CmdRunner(dry=args.dry_run, verbose=args.verbose, quiet=args.quiet)
-
+    
+    # Set Constants
+    DOTFILES = Path.home() / "dotfiles"
+    PACKAGES = DOTFILES / "package-list"
+    
+    
     # Edit mode
     if args.edit:
         editor_cmd = os.environ.get("EDITOR", "vi").split()
         if not shutil.which(editor_cmd[0]):
             logger.error(f"'{editor_cmd}' not found")
             sys.exit(ExitCode.MISSING_DEPENDENCY)
-        subprocess.run(editor_cmd + [str(Path.home() / ".dotfiles")])
+        subprocess.run(editor_cmd + [str(DOTFILES)])
         sys.exit(ExitCode.OK)
-
-    # Sync dotfiles
-    dot_mgr = DotfilesManager(Path.home() / ".dotfiles", ["scripts"], runner)
-    rc = dot_mgr.sync()
-    if rc != ExitCode.OK:
-        sys.exit(rc)
 
     # Run package managers
     managers = make_managers(runner)
@@ -446,6 +439,12 @@ if __name__ == "__main__":
         rc = mgr()
         if rc != ExitCode.OK:
             sys.exit(rc)
+
+    # # Sync dotfiles
+    # dot_mgr = DotfilesManager(DOTFILES, ["scripts"], runner)
+    # rc = dot_mgr.sync()
+    # if rc != ExitCode.OK:
+    #     sys.exit(rc)
 
     sys.exit(ExitCode.OK)
 else:
