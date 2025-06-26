@@ -1,0 +1,28 @@
+[project]
+name = "global-tools"
+version = "0.1.0"
+description = "Global Python CLI tools and libraries"
+dependencies = [
+  # Fun CLI Tool I wrote
+  "basedisp>=0.1.0",
+  # Scipy Stack
+  "numpy>=2.2.4",
+  "matplotlib>=3.10.1",
+  "scipy>=1.15.2",
+  # Manage build systems in python
+  "buildmgr==0.1.1",
+  #
+  "jupytext",
+  #
+  "xonsh",
+  "xonsh[full]",
+  "xontrib-kitty",
+  "xontrib-pipeliner",
+  "xontrib-sh",
+  "tool>=0.8.0",
+  "jupyterlab>=1.1.1",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
