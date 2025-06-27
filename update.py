@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 __version__ = "0.1.0"
 
+import argparse
 import logging
 import shlex
 import shutil
@@ -333,3 +334,37 @@ def make_uv_manager(runner: CmdRunner) -> PackageManager:
         install_args=["install"],
         cleanup_args=None,
     )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(prog="update.py")
+    parser.add_argument(
+        "-n",
+        "--dry-run",
+        action="store_true",
+        help="Test commands without running",
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"{parser.prog} {__version__}",
+    )
+    verbosity = parser.add_mutually_exclusive_group(required=False)
+    verbosity.add_argument(
+        "-v", "--verbose", action="store_true", help="Print all log messages"
+    )
+    verbosity.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Supress messages (besides errors)",
+    )
+
+    args = parser.parse_args()
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+    elif args.quiet:
+        logging.getLogger().setLevel(logging.ERROR)
+
+    runner = CmdRunner(dry=args.dry_run, verbose=args.verbose, quiet=args.quiet)
