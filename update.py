@@ -7,6 +7,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Optional, Sequence, Union
 
@@ -26,44 +27,15 @@ STOW_IGNORE: list[str] = []  # to be populated later
 
 
 # --- Exceptions --------------------------------------------------------------
-class PackagingError(Exception):
-    """Base exception for package manager-related failures."""
-
-
-class BootstrapError(PackagingError):
-    """Raised during bootstrap failures."""
-
-    pass
-
-
-class UpdateError(PackagingError):
-    """Raised when update fails."""
-
-    pass
-
-
-class InstallError(PackagingError):
-    """Raised when install fails."""
-
-    pass
-
-
-class CleanupError(PackagingError):
-    """Raised when cleanup fails."""
-
-    pass
-
-
-class UninstallError(PackagingError):
-    """Raised when uninstall fails."""
-
-    pass
-
-
-class NotInstalledError(PackagingError):
-    """Raised if trying to operate on a missing executable."""
-
-    pass
+# fmt: off
+class PackagingError(Exception): pass # noqa: E701
+class BootstrapError(PackagingError): pass # noqa: E701
+class UpdateError(PackagingError): pass # noqa: E701
+class InstallError(PackagingError): pass # noqa: E701
+class CleanupError(PackagingError): pass # noqa: E701
+class UninstallError(PackagingError): pass # noqa: E701
+class NotInstalledError(PackagingError): pass # noqa: E701
+# fmt: on
 
 
 # --- Command wrapper --------------------------------------------------------
@@ -158,89 +130,81 @@ class PackageManager:
         runner: CmdRunner,
         program: Union[str, Sequence[str]],
         bootstrap_cmd: Command,
-        update_args: Optional[Union[str, Sequence[str]]],
-        install_args: Optional[Union[str, Sequence[str]]],
-        cleanup_args: Optional[Union[str, Sequence[str]]],
-        uninstall_args: Optional[Union[str, Sequence[str]]] = None,
+        update_args: Optional[
+            Union[Sequence[str], Callable[[], Sequence[str]]]
+        ],
+        install_args: Optional[
+            Union[Sequence[str], Callable[[], Sequence[str]]]
+        ],
+        cleanup_args: Optional[
+            Union[Sequence[str], Callable[[], Sequence[str]]]
+        ],
+        uninstall_args: Optional[
+            Union[Sequence[str], Callable[[], Sequence[str]]]
+        ] = None,
         use_sudo: bool = False,
     ) -> None:
         self.name = name
         self.runner = runner
+        self.program = program
         self.bootstrap_cmd = bootstrap_cmd
         self.use_sudo = use_sudo
+        self._update_args = update_args
+        self._install_args = install_args
+        self._cleanup_args = cleanup_args
+        self._uninstall_args = uninstall_args
 
-        # Resolve the actual executable name
-        try:
-            program_exec = Command(program, None).program
-        except FileNotFoundError:
-            raise NotInstalledError(f"{name} executable not found")
-        self.program_name = program_exec
+    @property
+    def installed(self) -> bool:
+        candidates = (
+            [self.program]
+            if isinstance(self.program, str)
+            else list(self.program)
+        )
+        return any(shutil.which(c) for c in candidates if isinstance(c, str))
 
-        # Prepare commands, passing through sudo flag
-        self.update_cmd = (
-            Command(program_exec, update_args, sudo=self.use_sudo)
-            if update_args
-            else None
-        )
-        self.install_cmd = (
-            Command(program_exec, install_args, sudo=self.use_sudo)
-            if install_args
-            else None
-        )
-        self.cleanup_cmd = (
-            Command(program_exec, cleanup_args, sudo=self.use_sudo)
-            if cleanup_args
-            else None
-        )
-        self.uninstall_cmd = (
-            Command(program_exec, uninstall_args, sudo=self.use_sudo)
-            if uninstall_args
-            else None
-        )
-
-    def _run(
-        self,
-        cmd: Optional[Command],
-        exc: Optional[type[Exception]],
-    ) -> None:
-        if cmd:
-            self.runner(cmd, exc)
+    def _get_args(
+        self, args_source: Union[Sequence[str], Callable[[], Sequence[str]]]
+    ) -> Sequence[str]:
+        return args_source() if callable(args_source) else args_source
 
     def bootstrap(self) -> None:
         if not self.installed:
-            self._run(self.bootstrap_cmd, BootstrapError)
+            self.runner(self.bootstrap_cmd, BootstrapError)
         else:
-            logger.info(f"{self.name} already installed; skipping bootstrap")
+            logger.info(f"{self.name} present; skip bootstrap")
 
     def update(self) -> None:
-        if self.update_cmd:
-            self._run(self.update_cmd, UpdateError)
+        if self.installed and self._update_args:
+            args = self._get_args(self._update_args)
+            cmd = Command(self.program, args, sudo=self.use_sudo)
+            self.runner(cmd, UpdateError)
 
     def install(self) -> None:
-        if self.install_cmd:
-            self.runner(self.install_cmd, InstallError)
+        if self.installed and self._install_args:
+            args = self._get_args(self._install_args)
+            cmd = Command(self.program, args, sudo=self.use_sudo)
+            self.runner(cmd, InstallError)
         else:
-            raise InstallError(f"No install method provided for {self.name}")
+            logger.info(f"{self.name} not present; skip install")
 
     def cleanup(self) -> None:
-        if self.cleanup_cmd:
-            self._run(self.cleanup_cmd, CleanupError)
+        if self.installed and self._cleanup_args:
+            args = self._get_args(self._cleanup_args)
+            cmd = Command(self.program, args, sudo=self.use_sudo)
+            self.runner(cmd, CleanupError)
 
     def uninstall(self) -> None:
-        if self.uninstall_cmd:
-            self._run(self.uninstall_cmd, UninstallError)
-        else:
-            raise UninstallError(f"No uninstall method for {self.name}")
+        if self.installed and self._uninstall_args:
+            args = self._get_args(self._uninstall_args)
+            cmd = Command(self.program, args, sudo=self.use_sudo)
+            self.runner(cmd, UninstallError)
 
     def __call__(self) -> None:
         self.bootstrap()
         self.update()
         self.install()
         self.cleanup()
-
-    @property
-    def installed(self) -> bool:
-        return shutil.which(self.program_name) is not None
 
 
 # --- Factory functions ------------------------------------------------------
