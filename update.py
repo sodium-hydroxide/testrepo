@@ -19,7 +19,8 @@ if sys.version_info < (3, 9):
     raise RuntimeError("Python >= 3.9 required")
 
 # --- Paths -------------------------------------------------------------------
-DOTFILES = Path.home() / "dotfiles"
+HOME = Path.home()
+DOTFILES = HOME / "dotfiles"
 PACKAGE_LIST = DOTFILES / "package-list"
 STOW_IGNORE: list[str] = []  # to be populated later
 
@@ -243,7 +244,8 @@ class PackageManager:
 
 
 # --- Factory functions ------------------------------------------------------
-def make_apt_manager(runner: CmdRunner) -> PackageManager:
+def create_managers(runner: CmdRunner) -> Sequence[PackageManager]:
+    # Setup apt
     aptfile = PACKAGE_LIST / "aptfile"
     if not aptfile.exists():
         raise InstallError("cannot find aptfile for apt")
@@ -252,10 +254,10 @@ def make_apt_manager(runner: CmdRunner) -> PackageManager:
         for ln in aptfile.read_text().splitlines()
         if ln.strip() and not ln.startswith("#")
     ]
-    return PackageManager(
+    apt = PackageManager(
         name="apt",
         runner=runner,
-        program="apt",
+        program="/usr/bin/apt",
         bootstrap_cmd=Command("true"),
         update_args=["update"],
         install_args=["install", "-y", *packages],
@@ -263,15 +265,18 @@ def make_apt_manager(runner: CmdRunner) -> PackageManager:
         use_sudo=True,
     )
 
-
-def make_brew_manager(runner: CmdRunner) -> PackageManager:
     brewfile = PACKAGE_LIST / "Brewfile"
     if not brewfile.exists():
         raise InstallError("cannot find Brewfile for Homebrew")
-    return PackageManager(
+    brew = PackageManager(
         name="brew",
         runner=runner,
-        program="brew",
+        program=[
+            "brew",
+            "/opt/homebrew/bin/brew",
+            "/usr/local/Homebrew/bin/brew",
+            "/home/linuxbrew/.linuxbrew/bin/brew",
+        ],
         bootstrap_cmd=Command(
             "sh",
             [
@@ -291,20 +296,18 @@ def make_brew_manager(runner: CmdRunner) -> PackageManager:
         cleanup_args=["cleanup"],
     )
 
-
-def make_cargo_manager(runner: CmdRunner) -> PackageManager:
-    cargo_tools = PACKAGE_LIST / "cargo-tools.txt"
+    cargo_tools = PACKAGE_LIST / "cargofile"
     if not cargo_tools.exists():
         raise InstallError("cannot find cargo-tools.txt for cargo")
-    tools = [
+    cargo_tools = [
         ln.strip()
         for ln in cargo_tools.read_text().splitlines()
         if ln.strip() and not ln.startswith("#")
     ]
-    return PackageManager(
+    cargo = PackageManager(
         name="cargo",
         runner=runner,
-        program="cargo",
+        program=f"{HOME}/.cargo/bin/cargo",
         bootstrap_cmd=Command(
             "sh",
             [
@@ -313,13 +316,14 @@ def make_cargo_manager(runner: CmdRunner) -> PackageManager:
             ],
         ),
         update_args=["install-update", "-a"],
-        install_args=["install", *tools],
+        install_args=["install", *cargo_tools],
         cleanup_args=None,
     )
 
-
-def make_uv_manager(runner: CmdRunner) -> PackageManager:
-    return PackageManager(
+    pip_tools = PACKAGE_LIST / "pipfile"
+    if not pip_tools.exists():
+        raise InstallError("cannot find pipfile for uv")
+    uv = PackageManager(
         name="uv",
         runner=runner,
         program="uv",
@@ -331,9 +335,10 @@ def make_uv_manager(runner: CmdRunner) -> PackageManager:
             ],
         ),
         update_args=["upgrade"],
-        install_args=["install"],
+        install_args=["tool", "install", "--with-requirements", f"{pip_tools}"],
         cleanup_args=None,
     )
+    return [apt, brew, cargo, uv]
 
 
 if __name__ == "__main__":
@@ -368,3 +373,5 @@ if __name__ == "__main__":
         logging.getLogger().setLevel(logging.ERROR)
 
     runner = CmdRunner(dry=args.dry_run, verbose=args.verbose, quiet=args.quiet)
+    for manager in create_managers(runner):
+        manager()
