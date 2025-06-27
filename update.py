@@ -248,7 +248,7 @@ def create_managers(runner: CmdRunner) -> Sequence[PackageManager]:
     # Setup apt
     aptfile = PACKAGE_LIST / "aptfile"
     if not aptfile.exists():
-        raise InstallError("cannot find aptfile for apt")
+        raise InstallError(f"cannot find {aptfile} for apt")
     packages = [
         ln.strip()
         for ln in aptfile.read_text().splitlines()
@@ -267,7 +267,7 @@ def create_managers(runner: CmdRunner) -> Sequence[PackageManager]:
 
     brewfile = PACKAGE_LIST / "Brewfile"
     if not brewfile.exists():
-        raise InstallError("cannot find Brewfile for Homebrew")
+        raise InstallError(f"cannot find {brewfile} for Homebrew")
     brew = PackageManager(
         name="brew",
         runner=runner,
@@ -298,7 +298,7 @@ def create_managers(runner: CmdRunner) -> Sequence[PackageManager]:
 
     cargo_tools = PACKAGE_LIST / "cargofile"
     if not cargo_tools.exists():
-        raise InstallError("cannot find cargo-tools.txt for cargo")
+        raise InstallError(f"cannot find {cargo_tools} for cargo")
     cargo_tools = [
         ln.strip()
         for ln in cargo_tools.read_text().splitlines()
@@ -322,7 +322,7 @@ def create_managers(runner: CmdRunner) -> Sequence[PackageManager]:
 
     pip_tools = PACKAGE_LIST / "pipfile"
     if not pip_tools.exists():
-        raise InstallError("cannot find pipfile for uv")
+        raise InstallError(f"cannot find {pip_tools} for uv")
     uv = PackageManager(
         name="uv",
         runner=runner,
