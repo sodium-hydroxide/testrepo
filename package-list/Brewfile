@@ -1,2 +1,2 @@
 
-brew "neovim", args: ["--build-from-source"]
+brew "neovim", args: ["build-from-source"]
