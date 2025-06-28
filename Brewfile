@@ -1,0 +1,45 @@
+# Needed for homebrew on linux
+apt "bash"
+apt "bsdutils"
+apt "dash"
+apt "diffutils"
+apt "efibootmgr"
+apt "findutils"
+apt "ggc-14-base"
+apt "grep"
+apt "grub-efi-amd64"
+apt "grup-efi-amd64-signed"
+apt "gzip"
+apt "hostname"
+apt "libc-bin"
+apt "linux-generic"
+apt "login"
+apt "lxd-installer"
+apt "ncurses-base"
+apt "ncurses-bin"
+apt "sim-signed"
+apt "stow"
+apt "ubuntu-server-minimal"
+apt "util-linux"
+apt "build-essential"
+apt "binutils"
+apt "procps"
+apt "curl"
+apt "file"
+apt "git"
+
+
+cask "iterm2"
+
+apt "wezterm"
+
+apt "neovim"
+
+brew "gh"
+
+uv "ruff"
+uv "pyright"
+
+cargo "zoxide"
+stow "~/dotfiles/config_files"
+shell "touch i_hope_this_works"
